@@ -5,7 +5,7 @@ android {
     buildToolsVersion "28.0.1"
 
     defaultConfig {
-        applicationId "com.example.quickfind"
+        applicationId "com.example.slidemenu"
         minSdkVersion 28
         targetSdkVersion 28
         versionCode 1
