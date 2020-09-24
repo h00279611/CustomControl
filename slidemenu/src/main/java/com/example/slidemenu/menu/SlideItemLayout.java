@@ -1,8 +1,8 @@
 package com.example.slidemenu.menu;
 
-import android.app.PendingIntent;
 import android.content.Context;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.FrameLayout;
@@ -16,11 +16,15 @@ import androidx.annotation.Nullable;
  */
 public class SlideItemLayout extends FrameLayout {
 
+    private static final String TAG = SlideItemLayout.class.getSimpleName();
     private View contentView;
     private View menuView;
 
     // 滚动者
     private Scroller mScroller;
+
+    // 菜单打开关闭回调
+    private SlideListener mSlideListener;
 
     private int contentWidth;
     private int menuWidth;
@@ -70,16 +74,60 @@ public class SlideItemLayout extends FrameLayout {
     private float startX;
     private float startY;
 
+    // 当手指被按下的坐标，只记录一次
+    private float downX;
+    private float downY;
+
+
+    // 当对contentView设置了点击事件后，左右滑动时也会触发contentView的点击事件，所以需要在其父控件slideItemLayout中重写onInterceptTouchEvent方法
+    // onInterceptTouchEvent方法在左右滑动的时候返回true,这样就会调用其onTouchEvent，在其它情况下返回false,这样点击的时候也会执行子view的click方法了
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent event) {
+        boolean isIntercept = false;
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                Log.d(TAG, "SlideItemLayout-onTouchEvent-ACTION_DOWN");
+                // 按下记录坐标
+                downX = startX = event.getX();
+                downY = startY = event.getY();
+                if (mSlideListener != null) {
+                    mSlideListener.onDown(this);
+                }
+                break;
+            case MotionEvent.ACTION_MOVE:
+                Log.d(TAG, "SlideItemLayout-onTouchEvent-ACTION_MOVE");
+                // 记录结束值
+                float endX = event.getX();
+
+                // 只要判断在水平方向上有滑动就需要拦截
+                float DX = Math.abs(endX - downX);
+                if (DX > 8) {
+                    // 水平方向滑动
+                    // 响应侧滑
+                    isIntercept = true;
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+                break;
+
+        }
+
+        return isIntercept;
+    }
+
+    // Activity -> RelativeLayout -> ListView -> SlideItemLayout ->(contentView + menuView)
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         super.onTouchEvent(event);
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
+                Log.d(TAG, "SlideItemLayout-onTouchEvent-ACTION_DOWN");
                 // 按下记录坐标
-                startX = event.getX();
-                startY = event.getY();
+                downX = startX = event.getX();
+                downY = startY = event.getY();
                 break;
             case MotionEvent.ACTION_MOVE:
+                Log.d(TAG, "SlideItemLayout-onTouchEvent-ACTION_MOVE");
                 // 记录结束值
                 float endX = event.getX();
                 float endY = event.getY();
@@ -102,12 +150,25 @@ public class SlideItemLayout extends FrameLayout {
 
                 startX = event.getX();
                 startY = event.getY();
+
+                // 可能存在同时上下滑动ListView上滑动和左右滑动SlideItem滑动的情况
+                // 在X轴和Y轴滑动的距离
+                float DX = Math.abs(endX - downX);
+                float DY = Math.abs(endY - downY);
+                if (DX > DY && DX > 8) {
+                    // 水平方向滑动
+                    // 响应侧滑
+                    // 反拦截-事件不让父类ListView处理,交给SlideItemLayout处理
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                }
                 break;
             case MotionEvent.ACTION_UP:
+                Log.d(TAG, "SlideItemLayout-onTouchEvent-ACTION_UP");
                 int totalScrollX = getScrollX();// 偏移量
+                // 当手指松开时，如果Menu向左滑动距离小于一半，则回弹回去不显示，否则显示此Menu
                 if (totalScrollX < menuWidth / 2) {
                     // 关闭右侧Menu
-                     closeMenu();
+                    closeMenu();
                 } else {
                     // 打开Menu
                     openMenu();
@@ -130,9 +191,14 @@ public class SlideItemLayout extends FrameLayout {
         mScroller.startScroll(getScrollX(), getScrollY(), distanceX, 0);
 
         invalidate();// 重新绘制
+
+        if (mSlideListener != null) {
+            mSlideListener.onOpen(this);
+        }
+
     }
 
-    private void closeMenu() {
+    public void closeMenu() {
         // -> 关闭menu菜单向右滑动
         // getScrollX: 表示当前已经移动的偏移量，其实就是menu最开始在最右侧滑动此时的距离
         // distanceX: menu要关闭，需要滑动到最右侧，此时还需要在X轴上滑动的距离，向右为负，向左为正
@@ -142,15 +208,25 @@ public class SlideItemLayout extends FrameLayout {
         mScroller.startScroll(getScrollX(), getScrollY(), distanceX, 0);
 
         invalidate();// 重新绘制
+
+        if (mSlideListener != null) {
+            mSlideListener.onClose(this);
+        }
+
     }
 
     @Override
     public void computeScroll() {
         super.computeScroll();
-        if(mScroller.computeScrollOffset()){
+        if (mScroller.computeScrollOffset()) {
             scrollTo(mScroller.getCurrX(), mScroller.getCurrY());
             invalidate();
         }
 
+    }
+
+
+    public void setSlideListener(SlideListener slideListener) {
+        mSlideListener = slideListener;
     }
 }
