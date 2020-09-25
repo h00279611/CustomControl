@@ -1,4 +1,7 @@
 include ':slidemenu'
 include ':quickfind'
 include ':app'
+include ':annotation'
+include ':annotation_process'
+include ':common'
 rootProject.name = "CustomControl"
